@@ -241,10 +241,10 @@ def add_new_mcp_server_handle():
     st.session_state.new_mcp_server_fd_msg = msg
 
 
-@st.dialog('MCP Server 配置')
+@st.dialog('MCP Server Configuration')
 def add_new_mcp_server():
     with st.form("my_form"):
-        st.write("**新增 MCP Server**")
+        st.write("**Add New MCP Server**")
 
         if 'new_mcp_server_fd_status' in st.session_state:
             if st.session_state.new_mcp_server_fd_status:
@@ -266,24 +266,24 @@ def add_new_mcp_server():
         new_mcp_server_name = st.text_input("Server Name", 
                                             value="", placeholder="Name description of server", key="new_mcp_server_name")
         
-        new_mcp_server_config_json = st.text_area("使用JSON配置", 
+        new_mcp_server_config_json = st.text_area("Use JSON Configuration", 
                                     height = 128,
                                     value="", key="new_mcp_server_json_config",
-                                    placeholder="需要提供一个有效的JSON字典")
-        with st.expander(label='输入字段配置', expanded=False):
+                                    placeholder="Need to provide a valid JSON dictionary")
+        with st.expander(label='Input Field Configuration', expanded=False):
             new_mcp_server_id = st.text_input("Server ID", 
                                             value="", placeholder="server id", key="new_mcp_server_id")
 
-            new_mcp_server_cmd = st.selectbox("运行命令", 
+            new_mcp_server_cmd = st.selectbox("Run Command", 
                                             mcp_command_list, key="new_mcp_server_cmd")
-            new_mcp_server_args = st.text_area("运行参数", 
+            new_mcp_server_args = st.text_area("Run Arguments", 
                                             value="", key="new_mcp_server_args",
                                             placeholder="mcp-server-git --repository path/to/git/repo")
-            new_mcp_server_env = st.text_area("环境变量", 
+            new_mcp_server_env = st.text_area("Environment Variables", 
                                             value="", key="new_mcp_server_env",
-                                            placeholder="需要提供一个有效的JSON字典")
+                                            placeholder="Need to provide a valid JSON dictionary")
 
-        submitted = st.form_submit_button("添加", 
+        submitted = st.form_submit_button("Add", 
                                           on_click=add_new_mcp_server_handle,
                                           disabled=False)
 
@@ -305,14 +305,14 @@ with st.sidebar:
 
     st.session_state.system_prompt = system_prompt
     st.session_state.enable_stream = st.toggle('Stream', value=True)
-    with st.expander(label='已有 MCP Servers', expanded=True):
+    with st.expander(label='Existing MCP Servers', expanded=True):
         for i, server_name in enumerate(st.session_state.mcp_servers):
             st.checkbox(label=server_name, value=False, key=f'mcp_server_{server_name}')
-    st.button("添加 MCP Server", 
+    st.button("Add MCP Server", 
               on_click=add_new_mcp_server)
     
     with st.container():
-        st.button("🗑️ 清空上下文", on_click=clear_conversation, key="clear_button")
+        st.button("🗑️ Clear Context", on_click=clear_conversation, key="clear_button")
 
 st.title("💬 Bedrock Chatbot with MCP")
 
