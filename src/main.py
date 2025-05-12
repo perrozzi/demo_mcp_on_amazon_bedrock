@@ -36,9 +36,9 @@ from mcp.shared.exceptions import McpError
 # 全局模型和服务器配置
 load_dotenv()  # load env vars from .env
 llm_model_list = {}
-shared_mcp_server_list = {}  # 共享的MCP服务器描述信息
-global_mcp_server_configs = {}  # 全局MCP服务器配置 server_id -> config
-user_mcp_server_configs = {}  # 用户特有的MCP服务器配置 user_id -> {server_id: config}
+shared_mcp_server_list = {}  # Shared MCP server description information
+global_mcp_server_configs = {}  # Global MCP server configuration server_id -> config
+user_mcp_server_configs = {}  # User-specific MCP server configuration user_id -> {server_id: config}
 MAX_TURNS = int(os.environ.get("MAX_TURNS",200))
 INACTIVE_TIME = int(os.environ.get("INACTIVE_TIME",60*24))  #mins
 
@@ -57,10 +57,10 @@ class UserSession:
             self.chat_client = ChatClientStream(credential_file="conf/credentials.csv")
         else:
             self.chat_client = ChatClientStream()
-        self.mcp_clients = {}  # 用户特定的MCP客户端
+        self.mcp_clients = {}  # User-specific MCP clients
         self.last_active = datetime.now()
         self.session_id = str(uuid.uuid4())
-        self.lock = asyncio.Lock()  # 用于同步会话内的操作
+        self.lock = asyncio.Lock()  # For synchronizing operations within the session
 
     async def cleanup(self):
         """清理用户会话资源"""
@@ -70,7 +70,7 @@ class UserSession:
         
         if cleanup_tasks:
             await asyncio.gather(*cleanup_tasks)
-            logger.info(f"用户 {self.user_id} 的 {len(cleanup_tasks)} 个MCP客户端已清理")
+            logger.info(f"User {self.user_id}'s {len(cleanup_tasks)} MCP clients have been cleaned up")
 
 # 用户会话存储
 user_sessions = {}
@@ -225,10 +225,10 @@ async def cleanup_inactive_sessions():
                     try:
                         await session.cleanup()
                     except Exception as e:
-                        logger.error(f"清理用户 {user_id} 会话失败: {e}")
+                        logger.error(f"Failed to clean up user {user_id} session: {e}")
         
         if inactive_users:
-            logger.info(f"已清理 {len(inactive_users)} 个不活跃用户会话")
+            logger.info(f"Cleaned up {len(inactive_users)} inactive user sessions")
 
             
 class Message(BaseModel):
@@ -300,7 +300,7 @@ async def shutdown_event():
     
     if cleanup_tasks:
         await asyncio.gather(*cleanup_tasks)
-        logger.info(f"已清理所有 {len(cleanup_tasks)} 个用户会话")
+        logger.info(f"Cleaned up all {len(cleanup_tasks)} user sessions")
 
 
 app = FastAPI(lifespan=lifespan)
