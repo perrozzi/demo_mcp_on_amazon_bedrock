@@ -24,21 +24,26 @@ This project is still being continuously explored and improved, and MCP is flour
 - Supports multiple users, user session isolation, and concurrent access.
 
 ## 2. Installation Steps
-### 2.1. Dependencies Installation
+
+You can install this project either directly on your system or using Docker. Choose the method that best suits your needs.
+
+### 2.1 Direct Installation
+
+#### 2.1.1 Dependencies Installation
 
 Currently, mainstream MCP Servers are developed and run on users' PCs based on NodeJS or Python, so users' PCs need to install these dependencies.
 
-### 2.1 NodeJS
+#### 2.1.2 NodeJS
 
 [Download and install](https://nodejs.org/en) NodeJS, this project has been thoroughly tested with version `v22.12.0`.
 
-### 2.2 Python
+#### 2.1.3 Python
 
 Some MCP Servers are developed based on Python, so users must install [Python](https://www.python.org/downloads/). Additionally, this project's code is also developed based on Python, requiring environment and dependency installation.
 
 First, install the Python package management tool uv, which can be referenced in the [uv](https://docs.astral.sh/uv/getting-started/installation/) official guide. This project has been thoroughly tested with version `v0.5.11`.
 
-### 2.3 Environment Configuration
+#### 2.1.4 Environment Configuration
 After downloading and cloning the project, enter the project directory to create a Python virtual environment and install dependencies:
 ```bash
 uv sync
@@ -49,7 +54,7 @@ At this point, the virtual environment has been created in the `.venv` directory
 source .venv/bin/activate
 ```
 
-### 2.4 Configuration Editing
+#### 2.1.5 Configuration Editing
 Project configuration is written to the `.env` file, which should include the following configuration items (it is recommended to copy `env_dev` and modify it):
 ```
 AWS_ACCESS_KEY_ID=(optional)<your-access-key>
@@ -64,6 +69,45 @@ MAX_TURNS=100
 ```
 
 Note: This project uses **AWS Bedrock Nova/Claude** series models, so you need to register and obtain access keys for these services.
+
+### 2.2 Docker Installation (Alternative)
+
+If you prefer using Docker, you can use the provided Dockerfile and docker-compose.yml files to build and run the project in a container.
+
+#### 2.2.1 Prerequisites
+- Docker and Docker Compose installed on your system
+- AWS credentials with access to Bedrock services
+
+#### 2.2.2 Setup
+
+1. Create a `.env` file in the project root with your AWS credentials:
+   ```
+   AWS_ACCESS_KEY_ID=your-access-key
+   AWS_SECRET_ACCESS_KEY=your-secret-key
+   AWS_REGION=your-aws-region
+   API_KEY=your-api-key
+   ```
+
+#### 2.2.3 Build and Run
+
+Build and start the container:
+```bash
+docker-compose up -d
+```
+
+Access the services:
+- ChatBot UI: http://localhost:8502
+- API Documentation: http://localhost:7002/docs#/
+
+To view logs:
+```bash
+docker-compose logs -f
+```
+
+To stop the container:
+```bash
+docker-compose down
+```
 
 ## 3. Running
 
