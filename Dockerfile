@@ -20,14 +20,12 @@ RUN node --version && npm --version
 
 # Install uv
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:/root/.uv/bin:${PATH}"
+ENV PATH="/root/.local/bin:${PATH}"
 
 # Make sure uv is in the PATH and executable
 RUN echo "PATH=$PATH" && \
     which uv || echo "uv not found in PATH" && \
-    ls -la /root/.cargo/bin/ || echo "Directory not found" && \
-    ls -la /root/.uv/bin/ || echo "Directory not found" && \
-    uv --version || (curl -LsSf https://astral.sh/uv/install.sh | bash && uv --version)
+    uv --version
 
 # Clone the repository
 COPY . /app/
