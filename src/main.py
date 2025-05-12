@@ -4,6 +4,11 @@ SPDX-License-Identifier: MIT-0
 """
 """
 FastAPI server for Bedrock Chat with MCP support
+
+This server supports multiple transport mechanisms for MCP clients:
+- stdio: For local server processes
+- SSE: For server-sent events
+- StreamableHTTP: For HTTP/HTTPS connections with optional streaming
 """
 import os
 import sys
@@ -161,11 +166,22 @@ async def initialize_user_servers(session: UserSession):
         try:
             # Create and connect to MCP server
             mcp_client = MCPClient(name=f"{session.user_id}_{server_id}")
-            await mcp_client.connect_to_server(
-                command=config["command"],
-                server_script_args=config.get("args", []),
-                server_script_envs=config.get("env", {})
-            )
+            
+            # Check if this is an HTTP connection
+            if "server_url" in config and config["server_url"]:
+                await mcp_client.connect_to_server(
+                    server_url=config["server_url"],
+                    http_headers=config.get("http_headers", {}),
+                    http_timeout=config.get("http_timeout", 30),
+                    http_sse_timeout=config.get("http_sse_timeout", 300)
+                )
+            else:
+                # Standard connection
+                await mcp_client.connect_to_server(
+                    command=config["command"],
+                    server_script_args=config.get("args", []),
+                    server_script_envs=config.get("env", {})
+                )
             
             # Add to user's client list
             session.mcp_clients[server_id] = mcp_client
@@ -264,6 +280,10 @@ class AddMCPServerRequest(BaseModel):
     args: List[str] = []
     env: Optional[Dict[str, str]] = Field(default_factory=dict) 
     config_json: Dict[str,Any] = Field(default_factory=dict)
+    server_url: Optional[str] = None  # For HTTP connections
+    http_headers: Optional[Dict[str, str]] = Field(default_factory=dict)  # HTTP headers
+    http_timeout: Optional[int] = 30  # HTTP timeout in seconds
+    http_sse_timeout: Optional[int] = 300  # HTTP SSE timeout in seconds
     
 class AddMCPServerResponse(BaseModel):
     errno: int
@@ -393,18 +413,36 @@ async def add_mcp_server(
                 config_json = config_json["mcpServers"]
                 
             server_id = list(config_json.keys())[0]
-            server_cmd = config_json[server_id]["command"]
-            server_script_args = config_json[server_id]["args"]
-            server_script_envs = config_json[server_id].get('env',{})
+            server_conf = config_json[server_id]
+            server_cmd = server_conf["command"]
+            server_script_args = server_conf["args"]
+            server_script_envs = server_conf.get('env',{})
+            
+            # Check for HTTP connection parameters in config_json
+            if "server_url" in server_conf:
+                data.server_url = server_conf["server_url"]
+                data.http_headers = server_conf.get("http_headers", {})
+                data.http_timeout = server_conf.get("http_timeout", 30)
+                data.http_sse_timeout = server_conf.get("http_sse_timeout", 300)
             
         # Connect to MCP server
         mcp_client = MCPClient(name=f"{session.user_id}_{server_id}")
         try:
-            await mcp_client.connect_to_server(
-                command=server_cmd,
-                server_script_args=server_script_args,
-                server_script_envs=server_script_envs
-            )
+            # Check if this is an HTTP connection
+            if data.server_url and (data.server_url.startswith('http://') or data.server_url.startswith('https://')):
+                await mcp_client.connect_to_server(
+                    server_url=data.server_url,
+                    http_headers=data.http_headers,
+                    http_timeout=data.http_timeout,
+                    http_sse_timeout=data.http_sse_timeout
+                )
+            else:
+                # Existing connection logic
+                await mcp_client.connect_to_server(
+                    command=server_cmd,
+                    server_script_args=server_script_args,
+                    server_script_envs=server_script_envs
+                )
             tool_conf = await mcp_client.get_tool_config(server_id=server_id)
             logger.info(f"User {session.user_id} connected to MCP server {server_id}, tools={tool_conf}")
             
@@ -415,6 +453,14 @@ async def add_mcp_server(
                 "env": server_script_envs,
                 "description": server_desc
             }
+            
+            # Add HTTP parameters if present
+            if data.server_url:
+                server_config["server_url"] = data.server_url
+                server_config["http_headers"] = data.http_headers
+                server_config["http_timeout"] = data.http_timeout
+                server_config["http_sse_timeout"] = data.http_sse_timeout
+                
             save_user_server_config(user_id, server_id, server_config)
             
             #save conf

@@ -4,12 +4,18 @@ SPDX-License-Identifier: MIT-0
 """
 """
 MCP Client maintains Multi-MCP-Servers
+
+Supports multiple transport mechanisms:
+- stdio: For local server processes
+- SSE: For server-sent events
+- StreamableHTTP: For HTTP/HTTPS connections with optional streaming
 """
 import os
 import logging
 import asyncio
 from typing import Optional, Dict
 from contextlib import AsyncExitStack
+from datetime import timedelta
 from pydantic import ValidationError
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client, get_default_environment
@@ -17,6 +23,7 @@ from mcp.types import Resource, Tool, TextContent, ImageContent, EmbeddedResourc
 from mcp.shared.exceptions import McpError
 from dotenv import load_dotenv
 from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamablehttp_client
 
 load_dotenv()  # load environment variables from .env
 
@@ -47,6 +54,7 @@ class MCPClient:
         # self.sessions: Dict[str, Optional[ClientSession]] = {}
         self.session = None
         self.exit_stack = AsyncExitStack()
+        self._is_http_connection = False
 
     @staticmethod
     def normalize_tool_name( tool_name):
@@ -77,17 +85,91 @@ class MCPClient:
         logger.info(f"\nDisconnecting to server [{self.name}]")
         await self.cleanup()
 
-    async def handle_resource_change(params: NotificationParams):
-        print(f"资源变更类型: {params['changeType']}")
-        print(f"受影响URI: {params['resourceURIs']}")
+    async def handle_resource_change(self, params: NotificationParams):
+        print(f"Resource change type: {params['changeType']}")
+        print(f"Affected URIs: {params['resourceURIs']}")
+    async def connect_via_http(self, url, headers=None, timeout=30, sse_read_timeout=300):
+        """Connect to an MCP server using StreamableHTTP transport
+        
+        Args:
+            url: The endpoint URL for the MCP server
+            headers: Optional headers to include in requests
+            timeout: HTTP timeout for regular operations (in seconds)
+            sse_read_timeout: Timeout for SSE read operations (in seconds)
+            
+        Returns:
+            bool: True if connection was successful
+        """
+        try:
+            # Ensure headers are serializable
+            safe_headers = {}
+            if headers:
+                for k, v in headers.items():
+                    if isinstance(v, (str, int, float, bool, type(None))):
+                        safe_headers[k] = v
+                    else:
+                        safe_headers[k] = str(v)
+            
+            transport = streamablehttp_client(
+                url=url,
+                headers=safe_headers,
+                timeout=timedelta(seconds=timeout),
+                sse_read_timeout=timedelta(seconds=sse_read_timeout),
+                terminate_on_close=False  # We don't need session management
+            )
+            
+            logger.info(f"\nConnecting to HTTP server at {url}")
+            
+            # Handle the tuple unpacking based on what streamablehttp_client returns
+            transport_result = await self.exit_stack.enter_async_context(transport)
+            if len(transport_result) == 3:
+                _stdio, _write, _ = transport_result
+            else:
+                _stdio, _write = transport_result
+                
+            self.session = await self.exit_stack.enter_async_context(ClientSession(_stdio, _write))
+            await self.session.initialize()
+            logger.info(f"\n{self.name} HTTP session initialized")
+            
+            # Mark this as an HTTP connection
+            self._is_http_connection = True
+            
+            await self.list_mcp_server()
+            return True
+        except Exception as e:
+            logger.error(f"\n{self.name} HTTP session initialization failed: {e}")
+            raise ValueError(f"Failed to connect to HTTP server: {e}")
     
     
     async def connect_to_server(self, server_script_path: str = "", server_script_args: list = [], 
-            server_script_envs: Dict = {}, command: str = "", server_url: str = ""):
-        """Connect to an MCP server"""
-        # if not ((command and server_script_args) or server_script_path):
-        #     raise ValueError("Run server via script or command.")
-        if  server_script_path:
+            server_script_envs: Dict = {}, command: str = "", server_url: str = "",
+            http_headers: Dict = None, http_timeout: int = 30, http_sse_timeout: int = 300):
+        """Connect to an MCP server
+        
+        Args:
+            server_script_path: Path to server script
+            server_script_args: Arguments for server script
+            server_script_envs: Environment variables for server script
+            command: Command to run server
+            server_url: URL for HTTP/SSE server connection
+            http_headers: Headers for HTTP connection (only used with server_url)
+            http_timeout: Timeout for HTTP operations in seconds (only used with server_url)
+            http_sse_timeout: Timeout for SSE operations in seconds (only used with server_url)
+            
+        Returns:
+            bool: True if connection was successful
+        """
+        # If server_url is provided and it's an HTTP URL, use StreamableHTTP transport
+        if server_url and (server_url.startswith('http://') or server_url.startswith('https://')):
+            return await self.connect_via_http(
+                url=server_url,
+                headers=http_headers,
+                timeout=http_timeout,
+                sse_read_timeout=http_sse_timeout
+            )
+            
+        # Otherwise, use existing stdio or SSE transport logic
+        if server_script_path:
             # run via script
             is_python = server_script_path.endswith('.py')
             is_js = server_script_path.endswith('.js')
@@ -118,11 +200,15 @@ class MCPClient:
                 command = "docker"
 
         env = get_default_environment()
-        if self.env['AWS_ACCESS_KEY_ID'] and self.env['AWS_ACCESS_KEY_ID']:
+        if self.env['AWS_ACCESS_KEY_ID'] and self.env['AWS_SECRET_ACCESS_KEY']:
             env['AWS_ACCESS_KEY_ID'] =  self.env['AWS_ACCESS_KEY_ID']
             env['AWS_SECRET_ACCESS_KEY'] = self.env['AWS_SECRET_ACCESS_KEY']
             env['AWS_REGION'] = self.env['AWS_REGION']
         env.update(server_script_envs)
+        
+        # Mark this as not an HTTP connection
+        self._is_http_connection = False
+        
         try: 
             if server_url:
                 transport = sse_client(server_url)
@@ -143,6 +229,7 @@ class MCPClient:
             logger.error(f"\n{self.name} session initialize failed: {e}")
             raise ValueError(f"Invalid server script or command. {e}")   
         await self.list_mcp_server()
+        return True
         
     async def list_mcp_server(self):
         try:
@@ -155,6 +242,9 @@ class MCPClient:
         tools = response.tools
         logger.info(f"\nConnected to server [{self.name}] with tools: " + str([tool for tool in tools]))
         
+    def is_http_connection(self):
+        """Check if the current connection is using StreamableHTTP transport"""
+        return hasattr(self, '_is_http_connection') and self._is_http_connection
         
     async def get_tool_config(self, model_provider='bedrock', server_id : str = ''):
         """Get llm's tool usage config via MCP server"""

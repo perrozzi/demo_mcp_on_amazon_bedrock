@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from mcp_client import MCPClient
 from utils import maybe_filter_to_n_most_recent_images
 import pandas as pd
+import base64  # Add missing import for base64
 load_dotenv()  # load environment variables from .env
 
 logger = logging.getLogger(__name__)
