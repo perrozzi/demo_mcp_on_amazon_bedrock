@@ -414,9 +414,19 @@ async def add_mcp_server(
                 
             server_id = list(config_json.keys())[0]
             server_conf = config_json[server_id]
-            server_cmd = server_conf["command"]
-            server_script_args = server_conf["args"]
-            server_script_envs = server_conf.get('env',{})
+            
+            # Check if this is a remote server configuration
+            if "server_url" in server_conf:
+                # This is a remote server configuration
+                data.server_url = server_conf["server_url"]
+                data.http_headers = server_conf.get("http_headers", {})
+                data.http_timeout = server_conf.get("http_timeout", 30)
+                data.http_sse_timeout = server_conf.get("http_sse_timeout", 300)
+            else:
+                # This is a local server configuration
+                server_cmd = server_conf["command"]
+                server_script_args = server_conf["args"]
+                server_script_envs = server_conf.get('env',{})
             
             # Check for HTTP connection parameters in config_json
             if "server_url" in server_conf:
