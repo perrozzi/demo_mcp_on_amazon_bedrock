@@ -33,7 +33,7 @@ from mcp_client import MCPClient
 from chat_client_stream import ChatClientStream
 from mcp.shared.exceptions import McpError
 
-# 全局模型和服务器配置
+# Global model and server configuration
 load_dotenv()  # load env vars from .env
 llm_model_list = {}
 shared_mcp_server_list = {}  # Shared MCP server description information
@@ -63,7 +63,7 @@ class UserSession:
         self.lock = asyncio.Lock()  # For synchronizing operations within the session
 
     async def cleanup(self):
-        """清理用户会话资源"""
+        """Clean up user session resources"""
         cleanup_tasks = []
         for client_id, client in self.mcp_clients.items():
             cleanup_tasks.append(client.cleanup())
@@ -72,9 +72,9 @@ class UserSession:
             await asyncio.gather(*cleanup_tasks)
             logger.info(f"User {self.user_id}'s {len(cleanup_tasks)} MCP clients have been cleaned up")
 
-# 用户会话存储
+# User session storage
 user_sessions = {}
-# 会话锁，防止会话创建和访问的竞争条件
+# Session lock to prevent race conditions in session creation and access
 session_lock = threading.RLock()
 
 async def get_api_key(auth: HTTPAuthorizationCredentials = Security(security)):
@@ -82,39 +82,39 @@ async def get_api_key(auth: HTTPAuthorizationCredentials = Security(security)):
         return auth.credentials
     raise HTTPException(status_code=403, detail="Could not validate credentials")
 
-# 保存全局MCP服务器配置
+# Save global MCP server configuration
 def save_global_server_config( server_id: str, config: dict):
-    """保存全局的MCP服务器配置"""
+    """Save global MCP server configuration"""
     global global_mcp_server_configs
     global_mcp_server_configs[server_id] = config
-    # 在实际应用中，这里应该将配置持久化到数据库或文件系统
-    logger.info(f"保存Global服务器配置 {server_id}")
+    # In a real application, configuration should be persisted to database or file system
+    logger.info(f"Saved Global server configuration {server_id}")
     
-# 保存用户MCP服务器配置
+# Save user MCP server configuration
 def save_user_server_config(user_id: str, server_id: str, config: dict):
-    """保存用户的MCP服务器配置"""
+    """Save user's MCP server configuration"""
     global user_mcp_server_configs
     with session_lock:
         if user_id not in user_mcp_server_configs:
             user_mcp_server_configs[user_id] = {}
         
         user_mcp_server_configs[user_id][server_id] = config
-        # 在实际应用中，这里应该将配置持久化到数据库或文件系统
-        logger.info(f"为用户 {user_id} 保存服务器配置 {server_id}")
+        # In a real application, configuration should be persisted to database or file system
+        logger.info(f"Saved server configuration {server_id} for user {user_id}")
 
-# 获取用户MCP服务器配置
+# Get user MCP server configuration
 def get_user_server_configs(user_id: str) -> dict:
-    """获取指定用户的所有MCP服务器配置"""
+    """Get all MCP server configurations for specified user"""
     return user_mcp_server_configs.get(user_id, {})
 
-# 获取global服务器配置
+# Get global server configuration
 def get_global_server_configs() -> dict:
-    """获取全局所有MCP服务器配置"""
+    """Get all global MCP server configurations"""
     return global_mcp_server_configs
 
 async def load_user_mcp_configs():
-    """加载用户MCP服务器配置"""
-    # 从文件或数据库加载
+    """Load user MCP server configurations"""
+    # Load from file or database
     try:
         config_file = os.environ.get('USER_MCP_CONFIG_FILE', 'conf/user_mcp_configs.json')
         if os.path.exists(config_file):
@@ -123,43 +123,43 @@ async def load_user_mcp_configs():
                     configs = json.load(f)
                     global user_mcp_server_configs
                     user_mcp_server_configs = configs
-                    logger.info(f"已加载 {len(configs)} 个用户的MCP服务器配置")
+                    logger.info(f"Loaded MCP server configurations for {len(configs)} users")
     except Exception as e:
-        logger.error(f"加载用户MCP配置失败: {e}")
+        logger.error(f"Failed to load user MCP configurations: {e}")
 
 async def save_user_mcp_configs():
     global user_mcp_server_configs
     # user_mcp_server_configs[user_id] = server_configs
-    """保存用户MCP服务器配置"""
-    # 保存到文件或数据库
+    """Save user MCP server configurations"""
+    # Save to file or database
     try:
         config_file = os.environ.get('USER_MCP_CONFIG_FILE', 'conf/user_mcp_configs.json')
         #add thread lock
         with session_lock:
             with open(config_file, 'w') as f:
                 json.dump(user_mcp_server_configs, f, indent=2)
-                logger.info(f"已保存 {len(user_mcp_server_configs)} 个用户的MCP服务器配置")
+                logger.info(f"Saved MCP server configurations for {len(user_mcp_server_configs)} users")
     except Exception as e:
-        logger.error(f"保存用户MCP配置失败: {e}")
+        logger.error(f"Failed to save user MCP configurations: {e}")
         
 async def initialize_user_servers(session: UserSession):
-    """初始化用户特有的MCP服务器"""
+    """Initialize user-specific MCP servers"""
     user_id = session.user_id
     
     server_configs = get_user_server_configs(user_id)
     
     global_server_configs = get_global_server_configs()
-    #合并全局和用户的servers
+    #Merge global and user servers
     server_configs = {**server_configs,**global_server_configs}
     
     logger.info(f"server_configs:{server_configs}")
-    # 初始化服务器连接
+    # Initialize server connections
     for server_id, config in server_configs.items():
-        if server_id in session.mcp_clients:  # 跳过已存在的服务器
+        if server_id in session.mcp_clients:  # Skip existing servers
             continue
             
         try:
-            # 创建并连接MCP服务器
+            # Create and connect to MCP server
             mcp_client = MCPClient(name=f"{session.user_id}_{server_id}")
             await mcp_client.connect_to_server(
                 command=config["command"],
@@ -167,7 +167,7 @@ async def initialize_user_servers(session: UserSession):
                 server_script_envs=config.get("env", {})
             )
             
-            # 添加到用户的客户端列表
+            # Add to user's client list
             session.mcp_clients[server_id] = mcp_client
             
             save_user_server_config(user_id, server_id, config)
@@ -182,37 +182,37 @@ async def get_or_create_user_session(
     request: Request,
     auth: HTTPAuthorizationCredentials = Security(security)
 ):
-    """获取或创建用户会话，优先使用X-User-ID头，并自动初始化用户服务器"""
-    # 先验证API密钥
+    """Get or create user session, prioritizing X-User-ID header, and automatically initialize user servers"""
+    # First verify API key
     await get_api_key(auth)
     
-    # 尝试从请求头获取用户ID，如果不存在则使用API密钥作为备用ID
+    # Try to get user ID from request header, if not exist use API key as fallback ID
     user_id = request.headers.get("X-User-ID", auth.credentials)
     
     with session_lock:
         is_new_session = user_id not in user_sessions
         if is_new_session:
             user_sessions[user_id] = UserSession(user_id)
-            logger.info(f"为用户 {user_id} 创建新会话: {user_sessions[user_id].session_id}")
+            logger.info(f"Created new session for user {user_id}: {user_sessions[user_id].session_id}")
         
-        # 更新最后活跃时间
+        # Update last active time
         user_sessions[user_id].last_active = datetime.now()
         session = user_sessions[user_id]
     
-    # 如果是新会话，初始化用户的MCP服务器
+    # If new session, initialize user's MCP servers
     if is_new_session:
         await initialize_user_servers(session)
     
     return session
 
 async def cleanup_inactive_sessions():
-    """定期清理不活跃的用户会话"""
+    """Periodically clean up inactive user sessions"""
     while True:
-        await asyncio.sleep(300)  # 每5分钟检查一次
+        await asyncio.sleep(300)  # Check every 5 minutes
         current_time = datetime.now()
         inactive_users = []
         
-        # 找出不活跃的用户
+        # Find inactive users
         with session_lock:
             for user_id, session in user_sessions.items():
                 if (current_time - session.last_active) > timedelta(minutes=INACTIVE_TIME):
@@ -273,26 +273,26 @@ class AddMCPServerResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """服务器启动时执行的任务"""
-    # 加载持久化的用户MCP配置
+    """Tasks to execute when server starts"""
+    # Load persisted user MCP configurations
     await load_user_mcp_configs()
-    # 启动其他初始化任务
+    # Start other initialization tasks
     await startup_event()
     yield
-    # 清理和保存状态
+    # Clean up and save state
     await shutdown_event()
     
 async def startup_event():
-    """服务器启动时执行的任务"""
-    # 启动会话清理任务
+    """Tasks to execute when server starts"""
+    # Start session cleanup task
     asyncio.create_task(cleanup_inactive_sessions())
 
 async def shutdown_event():
-    """服务器关闭时执行的任务"""
-    # 保存用户MCP配置
+    """Tasks to execute when server shuts down"""
+    # Save user MCP configurations
     await save_user_mcp_configs()
     
-    # 清理所有会话
+    # Clean up all sessions
     cleanup_tasks = []
     with session_lock:
         for user_id, session in user_sessions.items():
@@ -305,13 +305,13 @@ async def shutdown_event():
 
 app = FastAPI(lifespan=lifespan)
 
-# 添加CORS中间件支持跨域请求和自定义头
+# Add CORS middleware to support cross-origin requests and custom headers
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 在生产环境中应限制为特定的前端域名
+    allow_origins=["*"],  # In production environment, should be restricted to specific frontend domains
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],  # 允许所有头，包括自定义的X-User-ID
+    allow_headers=["*"],  # Allow all headers, including custom X-User-ID
 )
 
 
@@ -328,7 +328,7 @@ async def list_models(
     request: Request,
     auth: HTTPAuthorizationCredentials = Security(security)
 ):
-    # 只需验证API密钥，不需要用户会话
+    # Only need to verify API key, no user session required
     await get_api_key(auth)
     return JSONResponse(content={"models": [{
         "model_id": mid, 
@@ -339,13 +339,13 @@ async def list_mcp_server(
     request: Request,
     auth: HTTPAuthorizationCredentials = Security(security)
 ):
-    # 获取用户会话
+    # Get user session
     session = await get_or_create_user_session(request, auth)
     
-    # 合并全局和用户特定的服务器列表
+    # Merge global and user-specific server lists
     server_list = {**shared_mcp_server_list}
     
-    # 添加用户特有的服务器
+    # Add user-specific servers
     for server_id in session.mcp_clients:
         if server_id not in server_list:
             server_list[server_id] = f"User-specific server: {server_id}"
@@ -362,11 +362,11 @@ async def add_mcp_server(
     auth: HTTPAuthorizationCredentials = Security(security)
 ):
     global shared_mcp_server_list
-    # 获取用户会话
+    # Get user session
     session = await get_or_create_user_session(request, auth)
     user_id = session.user_id
     
-    # 使用会话锁确保操作是线程安全的
+    # Use session lock to ensure thread-safe operations
     async with session.lock:
         if data.server_id in session.mcp_clients:
             return JSONResponse(content=AddMCPServerResponse(
@@ -380,7 +380,7 @@ async def add_mcp_server(
         server_script_envs = data.env
         server_desc = data.server_desc if data.server_desc else data.server_id
         
-        # 处理配置JSON
+        # Process configuration JSON
         if data.config_json:
             config_json = data.config_json
             if not all([isinstance(k, str) for k in config_json.keys()]):
@@ -397,7 +397,7 @@ async def add_mcp_server(
             server_script_args = config_json[server_id]["args"]
             server_script_envs = config_json[server_id].get('env',{})
             
-        # 连接MCP服务器
+        # Connect to MCP server
         mcp_client = MCPClient(name=f"{session.user_id}_{server_id}")
         try:
             await mcp_client.connect_to_server(
@@ -408,7 +408,7 @@ async def add_mcp_server(
             tool_conf = await mcp_client.get_tool_config(server_id=server_id)
             logger.info(f"User {session.user_id} connected to MCP server {server_id}, tools={tool_conf}")
             
-            # 保存用户服务器配置以便将来恢复
+            # Save user server configuration for future recovery
             server_config = {
                 "command": server_cmd,
                 "args": server_script_args,
@@ -428,9 +428,9 @@ async def add_mcp_server(
                 msg="MCP server connect failed!"
             ).model_dump())
 
-        # 将客户端添加到用户会话
+        # Add client to user session
         session.mcp_clients[server_id] = mcp_client
-        # 更新全局服务器列表描述
+        # Update global server list description
         shared_mcp_server_list[server_id] = server_desc
         await save_user_mcp_configs()
         return JSONResponse(content=AddMCPServerResponse(
@@ -445,12 +445,12 @@ async def remove_mcp_server(
     request: Request,
     auth: HTTPAuthorizationCredentials = Security(security)
 ):
-    """删除用户的MCP服务器"""
-    # 获取用户会话
+    """Remove user's MCP server"""
+    # Get user session
     session = await get_or_create_user_session(request, auth)
     user_id = session.user_id
     
-    # 使用会话锁确保操作是线程安全的
+    # Use session lock to ensure thread-safe operations
     async with session.lock:
         if server_id not in session.mcp_clients:
             return JSONResponse(content=AddMCPServerResponse(
@@ -459,12 +459,12 @@ async def remove_mcp_server(
             ).model_dump())
             
         try:
-            # 清理资源
+            # Clean up resources
             await session.mcp_clients[server_id].cleanup()
-            # 移除服务器
+            # Remove server
             del session.mcp_clients[server_id]
             
-            # 从用户配置中删除
+            # Remove from user configuration
             if user_id in user_mcp_server_configs and server_id in user_mcp_server_configs[user_id]:
                 del user_mcp_server_configs[user_id][server_id]
             
@@ -481,7 +481,7 @@ async def remove_mcp_server(
             ).model_dump())
 
 async def stream_chat_response(data: ChatCompletionRequest, session: UserSession) -> AsyncGenerator[str, None]:
-    """为特定用户生成流式聊天响应"""
+    """Generate streaming chat response for specific user"""
     messages = [{
         "role": x.role,
         "content": [{"text": x.content}],
@@ -500,7 +500,7 @@ async def stream_chat_response(data: ChatCompletionRequest, session: UserSession
         thinking_start = False
         thinking_text_index = 0
         
-        # 使用用户特定的chat_client和mcp_clients
+        # Use user-specific chat_client and mcp_clients
         async for response in session.chat_client.process_query_stream(
                 model_id=data.model,
                 max_tokens=data.max_tokens,
@@ -525,7 +525,7 @@ async def stream_chat_response(data: ChatCompletionRequest, session: UserSession
                 }]
             }
             
-            # 处理不同的事件类型
+            # Handle different event types
             if response["type"] == "message_start":
                 event_data["choices"][0]["delta"] = {"role": "assistant"}
             
@@ -563,10 +563,10 @@ async def stream_chat_response(data: ChatCompletionRequest, session: UserSession
                     "content": f"Error: {response['data']['error']}"
                 }
 
-            # 发送事件
+            # Send event
             yield f"data: {json.dumps(event_data)}\n\n"
 
-            # 发送结束标记
+            # Send end marker
             if response["type"] == "message_stop" and response["data"]["stopReason"] == 'end_turn':
                 yield "data: [DONE]\n\n"
 
@@ -593,9 +593,9 @@ async def chat_completions(
     background_tasks: BackgroundTasks,
     auth: HTTPAuthorizationCredentials = Security(security)
 ):
-    # 获取用户会话
+    # Get user session
     session = await get_or_create_user_session(request, auth)
-    # 记录会话活动
+    # Record session activity
     session.last_active = datetime.now()
 
     if not data.messages:
@@ -611,14 +611,14 @@ async def chat_completions(
             usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         ).model_dump())
 
-    # 处理流式请求
+    # Handle streaming request
     if data.stream:
         return StreamingResponse(
             stream_chat_response(data, session),
             media_type="text/event-stream"
         )
 
-    # 处理非流式请求
+    # Handle non-streaming request
     messages = [{
         "role": x.role,
         "content": [{"text": x.content}],
@@ -635,7 +635,7 @@ async def chat_completions(
 
     try:
         tool_use_info = {}
-        async with session.lock:  # 确保当前用户的请求按顺序处理
+        async with session.lock:  # Ensure current user's requests are processed in order
             async for response in session.chat_client.process_query(
                     model_id=data.model,
                     max_tokens=data.max_tokens,
@@ -716,10 +716,10 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=7002)
     parser.add_argument('--mcp-conf', default='', help="the mcp servers json config file")
     parser.add_argument('--user-conf', default='conf/user_mcp_configs.json', 
-                       help="用户MCP服务器配置文件路径")
+                       help="User MCP server configuration file path")
     args = parser.parse_args()
     
-    # 设置用户配置文件路径环境变量
+    # Set user configuration file path environment variable
     os.environ['USER_MCP_CONFIG_FILE'] = args.user_conf
     
     try:
@@ -728,14 +728,14 @@ if __name__ == '__main__':
         if args.mcp_conf:
             with open(args.mcp_conf, 'r') as f:
                 conf = json.load(f)
-                # 加载全局MCP服务器配置
+                # Load global MCP server configurations
                 for server_id, server_conf in conf.get('mcpServers', {}).items():
                     if server_conf.get('status') == 0:
                         continue
                     shared_mcp_server_list[server_id] = server_conf.get('description', server_id)
                     save_global_server_config(server_id, server_conf)
 
-                # 加载模型配置
+                # Load model configurations
                 for model_conf in conf.get('models', []):
                     llm_model_list[model_conf['model_id']] = model_conf['model_name']
         # logger.info(f"shared_mcp_server_list:{shared_mcp_server_list}")
@@ -743,7 +743,7 @@ if __name__ == '__main__':
         server = uvicorn.Server(config)
         loop.run_until_complete(server.serve())
     finally:
-        # 确保退出时清理资源并保存用户配置
+        # Ensure resources are cleaned up and user configurations are saved on exit
         cleanup_tasks = []
         for user_id, session in user_sessions.items():
             cleanup_tasks.append(session.cleanup())
@@ -751,7 +751,7 @@ if __name__ == '__main__':
         if cleanup_tasks:
             loop.run_until_complete(asyncio.gather(*cleanup_tasks))
         
-        # 保存用户配置
+        # Save user configurations
         try:
             loop.run_until_complete(save_user_mcp_configs())
         except:
