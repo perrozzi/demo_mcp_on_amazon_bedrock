@@ -428,13 +428,6 @@ async def add_mcp_server(
                 server_script_args = server_conf["args"]
                 server_script_envs = server_conf.get('env',{})
             
-            # Check for HTTP connection parameters in config_json
-            if "server_url" in server_conf:
-                data.server_url = server_conf["server_url"]
-                data.http_headers = server_conf.get("http_headers", {})
-                data.http_timeout = server_conf.get("http_timeout", 30)
-                data.http_sse_timeout = server_conf.get("http_sse_timeout", 300)
-            
         # Connect to MCP server
         mcp_client = MCPClient(name=f"{session.user_id}_{server_id}")
         try:
@@ -458,18 +451,21 @@ async def add_mcp_server(
             
             # Save user server configuration for future recovery
             server_config = {
-                "command": server_cmd,
-                "args": server_script_args,
-                "env": server_script_envs,
                 "description": server_desc
             }
             
-            # Add HTTP parameters if present
+            # Check if this is a remote server or local server
             if data.server_url:
+                # Remote server configuration
                 server_config["server_url"] = data.server_url
                 server_config["http_headers"] = data.http_headers
                 server_config["http_timeout"] = data.http_timeout
                 server_config["http_sse_timeout"] = data.http_sse_timeout
+            else:
+                # Local server configuration
+                server_config["command"] = server_cmd
+                server_config["args"] = server_script_args
+                server_config["env"] = server_script_envs
                 
             save_user_server_config(user_id, server_id, server_config)
             
