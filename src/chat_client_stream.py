@@ -160,14 +160,14 @@ class ChatClientStream(ChatClient):
                             if use_client_pool:
                                 bedrock_client = self.get_bedrock_client_from_pool()
             
-                                if pool_attempt > len(self.bedrock_client_pool): # 如果都轮巡了一遍
+                                if pool_attempt > len(self.bedrock_client_pool): # If we've tried all clients in the pool
                                     delay = self.exponential_backoff(attempt)
                                     msg = f"Throttling exception encountered. Retrying in {delay:.2f} seconds (attempt {attempt+1}/{self.max_retries})\n"
                                     logger.warning(msg)
                                     time.sleep(delay)
                                     attempt += 1
-                                    attempt = min(attempt,2) ##最多退2步
-                                    pool_attempt = 0 #重置一下
+                                    attempt = min(attempt,2) ##maximum of 2 steps back
+                                    pool_attempt = 0 #reset counter
                                 pool_attempt+=1
                                 continue
                             else:
@@ -187,7 +187,7 @@ class ChatClientStream(ChatClient):
                             raise error
 
                 turn_i += 1
-                # 收集所有需要调用的工具请求
+                # Collect all tool requests that need to be called
                 tool_calls = []
                 async for event in self._process_stream_response(response):
                     logger.info(event)
@@ -204,8 +204,8 @@ class ChatClientStream(ChatClient):
                     if event["type"] == "block_delta":
                         delta = event["data"]
                         if "toolUse" in delta.get("delta", {}):
-                            #Claude 是stream输出input，而Nova是一次性输出
-                            #取出最近添加的tool,追加input参数
+                            #Claude streams the input output, while Nova outputs it all at once
+                            #Get the most recently added tool and append the input parameter
                             current_tool_use = tool_calls[-1]
                             if current_tool_use:
                                 current_tooluse_input += delta["delta"]["toolUse"]["input"]
@@ -222,7 +222,7 @@ class ChatClientStream(ChatClient):
                     # Handle tool use input in content block stop
                     if event["type"] == "block_stop":
                         if current_tooluse_input:
-                            #取出最近添加的tool,把input str转成json
+                            #Get the most recently added tool and convert input string to JSON
                             current_tool_use = tool_calls[-1]
                             if current_tool_use:
                                 current_tool_use["input"] = json.loads(current_tooluse_input)
@@ -277,7 +277,7 @@ class ChatClientStream(ChatClient):
                                                 "content": [{"text": err_msg}],
                                                 "status": 'error'
                                             }]*3
-                            # 使用 asyncio.gather 并行执行所有工具调用
+                            # Execute all tool calls in parallel
                             call_results = await asyncio.gather(*[execute_tool_call(tool) for tool in tool_calls])
                             # Correctly unpack the results - each call_result is a list of [tool_result, tool_text_result]
                             tool_results = []
@@ -288,7 +288,7 @@ class ChatClientStream(ChatClient):
                                 tool_text_results.append(result[1])
                                 tool_results_serializable.append(result[2])
                             logger.info(f'tool_text_results {tool_text_results}')
-                            # 处理所有工具调用的结果
+                            # Process all tool call results
                             tool_results_content = []
                             for tool_result in tool_results:
                                 logger.info("Call tool result: Id: %s" % (tool_result['toolUseId']) )

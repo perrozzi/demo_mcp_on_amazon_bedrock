@@ -24,41 +24,41 @@ mcp_base_url = os.environ.get('MCP_BASE_URL')
 mcp_command_list = ["uvx", "npx", "node", "python","docker","uv"]
 COOKIE_NAME = "mcp_chat_user_id"
 local_storage = LocalStorage()
-# 用户会话管理
+# User session management
 def initialize_user_session():
-    """初始化用户会话，确保每个用户有唯一标识符"""    
-    # 尝试从cookie中获取用户ID
+    """Initialize user session, ensuring each user has a unique identifier"""    
+    # Try to get user ID from cookie
     if "user_id" not in st.session_state:
         if local_storage and local_storage.getItem(COOKIE_NAME):
             st.session_state.user_id = local_storage.getItem(COOKIE_NAME)
-            logging.info(f"读取用户ID: {st.session_state.user_id}")
+            logging.info(f"Retrieved user ID: {st.session_state.user_id}")
             return
         else:
-            # 生成新的用户ID
+            # Generate new user ID
             st.session_state.user_id = str(uuid.uuid4())[:8]
-            # 保存到LocalStorage
+            # Save to LocalStorage
             local_storage.setItem(COOKIE_NAME, st.session_state.user_id)
     
-# 生成随机用户ID的函数
+# Function to generate random user ID
 def generate_random_user_id():
     st.session_state.user_id = str(uuid.uuid4())[:8]
-    # 更新cookie
+    # Update cookie
     local_storage.setItem(COOKIE_NAME, st.session_state.user_id)
-    logging.info(f"生成新的随机用户ID: {st.session_state.user_id}")
+    logging.info(f"Generated new random user ID: {st.session_state.user_id}")
     
-# 当用户手动更改ID时保存到cookie
+# Save to cookie when user manually changes ID
 def save_user_id():
     st.session_state.user_id = st.session_state.user_id_input
     local_storage.setItem(COOKIE_NAME, st.session_state.user_id)
-    logging.info(f"保存用户ID: {st.session_state.user_id}")
+    logging.info(f"Saved user ID: {st.session_state.user_id}")
 
 initialize_user_session()
     
 def get_auth_headers():
-    """构建包含用户身份的认证头"""
+    """Build authentication headers containing user identity"""
     headers = {
         'Authorization': f'Bearer {API_KEY}',
-        'X-User-ID': st.session_state.user_id  # 添加用户ID头
+        'X-User-ID': st.session_state.user_id  # Add user ID header
     }
     return headers
 
@@ -145,10 +145,10 @@ def request_chat(messages, model_id, mcp_server_ids, stream=False, max_tokens=10
             'temperature': temperature,
             'max_tokens': max_tokens
         }
-        logging.info(f'用户 {st.session_state.user_id} 请求payload: %s' % payload)
+        logging.info(f'User {st.session_state.user_id} request payload: %s' % payload)
         
         if stream:
-            # 流式请求
+            # Streaming request
             headers = get_auth_headers()
             headers['Accept'] = 'text/event-stream'  
             response = requests.post(url, json=payload, stream=True, headers=headers)
@@ -157,9 +157,9 @@ def request_chat(messages, model_id, mcp_server_ids, stream=False, max_tokens=10
                 return response, {}
             else:
                 msg = 'An error occurred when calling the Converse operation: The system encountered an unexpected error during processing. Try your request again.'
-                logging.error(f'用户 {st.session_state.user_id} 请求聊天错误: %d' % response.status_code)
+                logging.error(f'User {st.session_state.user_id} chat request error: %d' % response.status_code)
         else:
-            # 常规请求
+            # Regular request
             response = requests.post(url, json=payload, headers=get_auth_headers())
             data = response.json()
             msg = data['choices'][0]['message']['content']
@@ -167,12 +167,12 @@ def request_chat(messages, model_id, mcp_server_ids, stream=False, max_tokens=10
 
     except Exception as e:
         msg = 'An error occurred when calling the Converse operation: The system encountered an unexpected error during processing. Try your request again.'
-        logging.error(f'用户 {st.session_state.user_id} 请求聊天错误: %s' % e)
+        logging.error(f'User {st.session_state.user_id} chat request error: %s' % e)
     
-    logging.info(f'用户 {st.session_state.user_id} 响应消息: %s' % msg)
+    logging.info(f'User {st.session_state.user_id} response message: %s' % msg)
     return msg, msg_extras
 
-# 初始化会话状态
+# Initialize session state
 if not 'model_names' in st.session_state:
     st.session_state.model_names = {}
     for x in request_list_models():
@@ -189,7 +189,7 @@ if "system_prompt" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
     
-# 消息列表始终保持与当前system_prompt同步
+# Message list always stays in sync with current system_prompt
 if not st.session_state.messages or st.session_state.messages[0]["role"] != "system":
     st.session_state.messages.insert(0, {"role": "system", "content": st.session_state.system_prompt})
 else:
@@ -232,7 +232,7 @@ def add_new_mcp_server_handle():
     elif server_name in st.session_state.mcp_servers:
         status, msg = False, "The server name exists, try another name!"
 
-    # 如果server_config_json配置，则已server_config_json为准
+    # If server_config_json is configured, use it as the source of truth
     if server_config_json:
         try:
             config_json = json.loads(server_config_json)
@@ -240,8 +240,8 @@ def add_new_mcp_server_handle():
                 raise ValueError("env key must be str.")
             if "mcpServers" in config_json:
                 config_json = config_json["mcpServers"]
-            #直接使用json配置里的id
-            logging.info(f'用户 {st.session_state.user_id} 添加新MCP服务器: {config_json}')
+            # Use ID directly from JSON config
+            logging.info(f'User {st.session_state.user_id} adding new MCP server: {config_json}')
             server_id = list(config_json.keys())[0]
             server_cmd = config_json[server_id]["command"]
             server_args = config_json[server_id]["args"]
@@ -268,7 +268,7 @@ def add_new_mcp_server_handle():
     if isinstance(server_args, str):
         server_args = [x.strip() for x in server_args.split(' ') if x.strip()]
 
-    logging.info(f'用户 {st.session_state.user_id} 添加新MCP服务器: {server_id}:{server_name}')
+    logging.info(f'User {st.session_state.user_id} adding new MCP server: {server_id}:{server_name}')
     
     with st.spinner('Add the server...'):
         status, msg = request_add_mcp_server(server_id, server_name, server_cmd, 
@@ -336,7 +336,7 @@ with st.sidebar:
     with col1:
         st.session_state.user_id = st.text_input('User ID', key='user_id_input',value=st.session_state.user_id,on_change=save_user_id, max_chars=32)
     with col2:
-        st.button("🔄", on_click=generate_random_user_id, help="生成随机用户ID")
+        st.button("🔄", on_click=generate_random_user_id, help="Generate random user ID")
 
     llm_model_name = st.selectbox('Model List',
                                   list(st.session_state.model_names.keys()))
@@ -373,7 +373,7 @@ for msg in st.session_state.messages:
 
 # Handle user input
 if prompt := st.chat_input():
-    # 更新system message
+    # Update system message
     st.session_state.messages[0] = {"role": "system", "content": st.session_state.system_prompt}
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
@@ -404,8 +404,8 @@ if prompt := st.chat_input():
                 # Process streaming response
                 tool_count = 1
                 content_block_idx = 0
-                thinking_content = ""  # 添加变量存储累积的thinking内容
-                thinking_expander = None  # 用于存储thinking的expander对象
+                thinking_content = ""  # Add variable to store accumulated thinking content
+                thinking_expander = None  # For storing thinking expander object
                 for content in process_stream_response(response):
                     # logging.info(f"content block idx:{content_block_idx}")
                     content_block_idx += 1
@@ -417,10 +417,10 @@ if prompt := st.chat_input():
                     if thk_m:
                         thk_msg = thk_m.group(1)
                         full_response = re.sub(thk_regex, "", full_response,flags=re.DOTALL)
-                        # 如果有新的thinking内容，追加到现有内容中
+                        # If there's new thinking content, append to existing content
                         if thk_msg != thinking_content:
-                            thinking_content = thk_msg  # 更新thinking内容
-                            # 如果expander不存在则创建，否则更新现有的
+                            thinking_content = thk_msg  # Update thinking content
+                            # Create expander if it doesn't exist, otherwise update existing one
                             if thinking_expander is None:
                                 thinking_expander = st.expander("Thinking")
                             with thinking_expander:
@@ -441,23 +441,23 @@ if prompt := st.chat_input():
                                         st.code(json.dumps(tool_block, ensure_ascii=False, indent=2), language="json")
                                 else:
                                     with st.expander(f"Tool Result:{tool_count}"):
-                                         # 处理图片数据
+                                         # Process image data
                                         images_data = []
-                                        display_tool_block = copy.deepcopy(tool_block)  # 创建副本以修改
+                                        display_tool_block = copy.deepcopy(tool_block)  # Create copy for modification
                                         
-                                        # 如果有content字段，处理其中的图片
+                                        # If there's a content field, process images within it
                                         if 'content' in display_tool_block:
                                             for j, block in enumerate(display_tool_block['content']):
                                                 if 'image' in block and 'source' in block['image'] and 'base64' in block['image']['source']:
-                                                    # 保存图片数据用于后续显示
+                                                    # Save image data for later display
                                                     images_data.append(BytesIO(base64.b64decode(block['image']['source']['base64'])))
-                                                    # 替换base64字符串为提示信息
+                                                    # Replace base64 string with info message
                                                     display_tool_block['content'][j]['image']['source']['base64'] = "[BASE64 IMAGE DATA - NOT DISPLAYED]"
                                         
-                                        # 显示处理后的JSON
+                                        # Display processed JSON
                                         st.code(json.dumps(display_tool_block, ensure_ascii=False, indent=2), language="json")
                 
-                                        # 显示图片
+                                        # Display images
                                         tool_count += 1
                                         for image_data in images_data:
                                             st.image(image_data)

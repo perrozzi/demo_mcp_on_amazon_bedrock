@@ -150,13 +150,13 @@ class ChatClient:
                 # tool call has been requested. 
                 tool_requests = response['output']['message']['content']
 
-                # 收集所有需要调用的工具请求
+                # Collect all tool requests that need to be called
                 tool_calls = []
                 for tool_request in tool_requests:
                     if 'toolUse' in tool_request:
                         tool = tool_request['toolUse']
                         tool_calls.append(tool)
-                # 并行执行所有工具调用
+                # Execute all tool calls in parallel
                 async def execute_tool_call(tool):
                     logger.info("Call tool: %s" % tool)
                     try:
@@ -187,7 +187,7 @@ class ChatClient:
                                                 "content": [{"text": err_msg}],
                                                 "status": 'error'
                                   }]*2
-                # 使用 asyncio.gather 并行执行所有工具调用
+                # Use asyncio.gather to execute all tool calls in parallel
                 call_results = await asyncio.gather(*[execute_tool_call(tool) for tool in tool_calls])
                 tool_results = []
                 tool_text_results = []
@@ -195,7 +195,7 @@ class ChatClient:
                     tool_results.append(result[0])
                     tool_text_results.append(result[1])
                 logger.info(f'tool_text_results {tool_text_results}')
-                # 处理所有工具调用的结果
+                # Process all tool call results
                 tool_results_content = []
                 for tool_result in tool_results:
                     logger.info("Call tool result: Id: %s" % (tool_result['toolUseId']) )
