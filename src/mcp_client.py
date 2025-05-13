@@ -143,7 +143,8 @@ class MCPClient:
     
     async def connect_to_server(self, server_script_path: str = "", server_script_args: list = [], 
             server_script_envs: Dict = {}, command: str = "", server_url: str = "",
-            http_headers: Dict = None, http_timeout: int = 30, http_sse_timeout: int = 300):
+            http_headers: Dict = None, http_timeout: int = 30, http_sse_timeout: int = 300,
+            connection_type: str = ""):
         """Connect to an MCP server
         
         Args:
@@ -155,21 +156,56 @@ class MCPClient:
             http_headers: Headers for HTTP connection (only used with server_url)
             http_timeout: Timeout for HTTP operations in seconds (only used with server_url)
             http_sse_timeout: Timeout for SSE operations in seconds (only used with server_url)
+            connection_type: Type of connection ("stdio", "sse", "http"). If not provided, will be inferred.
             
         Returns:
             bool: True if connection was successful
         """
-        # If server_url is provided and it's an HTTP URL, use StreamableHTTP transport
-        if server_url and (server_url.startswith('http://') or server_url.startswith('https://')):
+        # Determine connection type if not explicitly provided
+        if not connection_type:
+            if server_url:
+                if server_url.startswith(('http://', 'https://')):
+                    connection_type = "http"
+                else:
+                    connection_type = "sse"
+            else:
+                connection_type = "stdio"
+        
+        # Handle HTTP connection
+        if connection_type.lower() == "http":
+            if not server_url:
+                raise ValueError("Server URL must be provided for HTTP connection type")
             return await self.connect_via_http(
                 url=server_url,
                 headers=http_headers,
                 timeout=http_timeout,
                 sse_read_timeout=http_sse_timeout
             )
+        
+        # Handle SSE connection
+        elif connection_type.lower() == "sse":
+            if not server_url:
+                raise ValueError("Server URL must be provided for SSE connection type")
+            try:
+                self._is_http_connection = True
+                transport = sse_client(server_url)
+                logger.info(f"\nAdding SSE server with URL: {server_url}")
+                
+                _stdio, _write = await self.exit_stack.enter_async_context(transport)
+                self.session = await self.exit_stack.enter_async_context(ClientSession(_stdio, _write))
+                await self.session.initialize()
+                logger.info(f"\n{self.name} SSE session initialize done")
+                await self.list_mcp_server()
+                return True
+            except Exception as e:
+                logger.error(f"\n{self.name} SSE session initialize failed: {e}")
+                raise ValueError(f"Invalid SSE server URL. {e}")
             
-        # Otherwise, use existing stdio or SSE transport logic
-        if server_script_path:
+        # Handle stdio connection (default)
+        elif connection_type.lower() == "stdio":
+            if not server_script_path and not command:
+                raise ValueError("Either server_script_path or command must be provided for stdio connection type")
+                
             # run via script
             is_python = server_script_path.endswith('.py')
             is_js = server_script_path.endswith('.js')
@@ -206,31 +242,33 @@ class MCPClient:
             env['AWS_REGION'] = self.env['AWS_REGION']
         env.update(server_script_envs)
         
-        # Mark this as not an HTTP connection
+        # Mark this as not an HTTP connection for stdio
         self._is_http_connection = False
         
-        try: 
-            if server_url:
-                # Check if it's an SSE or StreamableHTTP connection
-                if server_url.startswith(('http://', 'https://')):
-                    # This is a StreamableHTTP connection
-                    self._is_http_connection = True
-                    transport = streamablehttp_client(server_url)
-                    logger.info(f"\nAdding StreamableHTTP server with URL: {server_url}")
-                else:
-                    # This is an SSE connection
-                    self._is_http_connection = True
-                    transport = sse_client(server_url)
-                    logger.info(f"\nAdding SSE server with URL: {server_url}")
-            else:
-                # This is a stdio connection
-                self._is_http_connection = False
-                transport = stdio_client(StdioServerParameters(
-                    command=command, args=server_script_args, env=env
-                ))
+        try:
+            # Create stdio transport
+            transport = stdio_client(StdioServerParameters(
+                command=command, args=server_script_args, env=env
+            ))
+            
+            # Log appropriate message based on args
+            if server_script_args:
                 logger.info(f"\nAdding stdio server with command: {command} and args: {server_script_args}")
+            else:
+                logger.info(f"\nAdding stdio server with command: {command} (no args)")
+                
+            _stdio, _write = await self.exit_stack.enter_async_context(transport)
+            self.session = await self.exit_stack.enter_async_context(ClientSession(_stdio, _write))
+            await self.session.initialize()
+            logger.info(f"\n{self.name} stdio session initialize done")
+            
+            await self.list_mcp_server()
+            return True
         except Exception as e:
-            logger.error(f"\n{e}")
+            logger.error(f"\n{self.name} stdio session initialize failed: {e}")
+            raise ValueError(f"Invalid server script or command. {e}")
+        else:
+            raise ValueError(f"Unknown connection type: {connection_type}. Must be 'stdio', 'sse', or 'http'.")
             raise ValueError(f"Invalid server script or command. {e}")
         try:
             _stdio, _write = await self.exit_stack.enter_async_context(transport)
