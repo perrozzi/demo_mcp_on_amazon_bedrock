@@ -211,17 +211,24 @@ class MCPClient:
         
         try: 
             if server_url:
-                # Mark this as an HTTP connection
-                self._is_http_connection = True
-                transport = sse_client(server_url)
-                logger.info(f"\nAdding HTTP server with URL: {server_url}")
+                # Check if it's an SSE or StreamableHTTP connection
+                if server_url.startswith(('http://', 'https://')):
+                    # This is a StreamableHTTP connection
+                    self._is_http_connection = True
+                    transport = streamablehttp_client(server_url)
+                    logger.info(f"\nAdding StreamableHTTP server with URL: {server_url}")
+                else:
+                    # This is an SSE connection
+                    self._is_http_connection = True
+                    transport = sse_client(server_url)
+                    logger.info(f"\nAdding SSE server with URL: {server_url}")
             else:
                 # This is a stdio connection
                 self._is_http_connection = False
                 transport = stdio_client(StdioServerParameters(
                     command=command, args=server_script_args, env=env
                 ))
-                logger.info(f"\nAdding server with command: {command} and args: {server_script_args}")
+                logger.info(f"\nAdding stdio server with command: {command} and args: {server_script_args}")
         except Exception as e:
             logger.error(f"\n{e}")
             raise ValueError(f"Invalid server script or command. {e}")
