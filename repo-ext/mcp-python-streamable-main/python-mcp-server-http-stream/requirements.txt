@@ -1,0 +1,4 @@
+click
+anyio
+mcp
+starlette
