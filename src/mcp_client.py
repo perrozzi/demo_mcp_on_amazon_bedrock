@@ -212,14 +212,17 @@ class MCPClient:
         try: 
             if server_url:
                 transport = sse_client(server_url)
+                # Mark this as an HTTP connection
+                self._is_http_connection = True
+                logger.info(f"\nAdding HTTP server with URL: {server_url}")
             else:
                 transport = stdio_client(StdioServerParameters(
                     command=command, args=server_script_args, env=env
                 ))
+                logger.info(f"\nAdding server with command: {command} {server_script_args}")
         except Exception as e:
             logger.error(f"\n{e}")
             raise ValueError(f"Invalid server script or command. {e}")
-        logger.info(f"\nAdding server %s %s" % (command, server_script_args))
         try:
             _stdio, _write = await self.exit_stack.enter_async_context(transport)
             self.session = await self.exit_stack.enter_async_context(ClientSession(_stdio, _write))
